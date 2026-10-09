@@ -4,21 +4,21 @@
  * ========================================
  *
  * It does these main things:
- * 1. Connects to our MongoDB database (where we store company & ESG data)
+ * 1. Connects to our Supabase database (where we store company & ESG data)
  * 2. Sets up our API routes (URLs that the frontend can call)
  * 3. Starts the server so it can receive requests
  */
 
 import dotenv from "dotenv";
 import express from 'express';
-import mongoose from 'mongoose';
+import supabase from './utils/supabaseClient.js';
 import cors from 'cors';
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { initializeEmbedder } from './controllers/embeddingsController.js';
-import { PORT, MONGODB_URI } from './utils/config.js';
+import { PORT } from './utils/config.js';
 
 // ============================================================================
 // STEP 1: Create the Express App
@@ -63,23 +63,20 @@ app.use('*', notFoundHandler);
 app.use(errorHandler);
 
 // ============================================================================
-// STEP 5: Connect to MongoDB Database
+// STEP 5: Connect to Supabase Database
 // ============================================================================
 /**
- * This function connects to our MongoDB database
- * MongoDB is where we store company information and ESG scores
+ * This function connects to our Supabase database
+ * Supabase is where we store company information and ESG scores
  */
 async function connectDB() {
     try {
-        // Get the database connection URL from environment variables
-        // If not set, use a local database as fallback
-        // Try to connect!
-        await mongoose.connect(MONGODB_URI);
-        console.log('✅ MongoDB connected successfully');
+        const { error } = await supabase.from('_test_connection').select('*').limit(1);
+        if (error && error.code !== 'PGRST205') throw error;
+        console.log('✅ Successfully connected to Supabase database');
     } catch (error) {
-        // If connection fails, print error and stop the app
-        console.error('❌ MongoDB connection error:', error.message);
-        process.exit(1);  // Exit code 1 = something went wrong
+        console.error('❌ Failed to connect to Supabase database:', error.message);
+        process.exit(1);  // Exit the process with an error code
     }
 }
 
@@ -114,18 +111,14 @@ async function startServer() {
 // SIGTERM = signal sent when deploying new code
 process.on('SIGTERM', () => {
     console.log('⏹️  Shutting down gracefully...');
-    mongoose.connection.close(() => {
         process.exit(0);  // Exit code 0 = everything is OK
     });
-});
 
 // SIGINT = signal sent when you press Ctrl+C
 process.on('SIGINT', () => {
     console.log('⏹️  Shutting down gracefully...');
-    mongoose.connection.close(() => {
         process.exit(0);
     });
-});
 
 // ============================================================================
 // STEP 8: Start the Server (Only if this file is run directly)
