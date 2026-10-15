@@ -1,23 +1,20 @@
-import mongoose from 'mongoose';
-
-// Validate MongoDB ObjectId format in URL parameters
+// Validate UUID format in URL parameters
 export default function validateObjectId(paramName = 'id') {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
   return (req, res, next) => {
     const id = req.params[paramName];
 
-    // Skip validation if no ID provided
     if (!id) {
       return next();
     }
 
-    // Check if ID is a valid MongoDB ObjectId
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!uuidRegex.test(id)) {
       return res.status(400).json({
-        error: `Invalid ${paramName} format. Expected a valid MongoDB ObjectId.`
+        error: `Invalid ${paramName} format. Expected a valid UUID.`
       });
     }
 
-    // Continue to next middleware
     next();
   };
 }

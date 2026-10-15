@@ -1,27 +1,47 @@
-import mongoose from 'mongoose';
+import supabase from '../utils/supabaseClient.js';
 
-// Product cache schema for storing lookup results
-const productCacheSchema = new mongoose.Schema({
-  code: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true,
-    description: 'Product identifier (barcode, UPC, EAN, GTIN, or search query)'
-  },
-  data: {
-    type: mongoose.Schema.Types.Mixed,
-    required: true,
-    description: 'Cached product data in normalized format'
-  }
-}, {
-  timestamps: true // Adds createdAt and updatedAt
-});
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-// TTL index - automatically delete cache entries after 7 days
-productCacheSchema.index({ updatedAt: 1 }, { expireAfterSeconds: 604800 });
+const ProductCache = {
+    // Get cached data by code, but only if it's not expired
+    async get(code) {
+        const { data, error } = await supabase
+            .from('product_cache')
+            .select('*')
+            .eq('code', code)
+            .single();
 
-// Create and export the ProductCache model
-const ProductCache = mongoose.model("ProductCache", productCacheSchema);
+        if (error) return null; // not found is fine, just return null
+        
+        const isExpired = Date.now() - new Date(data.updated_at).getTime() > SEVEN_DAYS_MS;
+        if (isExpired) {
+            await this.delete(code); // clean up expired entry
+            return null;
+        }
+        return data;
+    },
+
+    // Save or update a cache entry (upsert = insert or update if it exists)
+    async set(code, productData) {
+        const { data, error } = await supabase
+            .from('product_cache')
+            .upsert(
+                { code, data: productData, updated_at: new Date().toISOString() },
+                { onConflict: 'code' }
+            )
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async delete(code) {
+        const { error } = await supabase
+            .from('product_cache')
+            .delete()
+            .eq('code', code);
+        if (error) throw error;
+    },
+};
 
 export default ProductCache;
